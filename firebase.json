@@ -6,6 +6,9 @@
     ]
   },
   "hosting": {
+    "predeploy": [
+      "npm run build"
+    ],
     "public": "build",
     "ignore": [
       "firebase.json",
@@ -18,5 +21,10 @@
         "destination": "/index.html"
       }
     ]
+  },
+  "emulators": {
+    "firestore": {
+      "port": "8080"
+    }
   }
 }
