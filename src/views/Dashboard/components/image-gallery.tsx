@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useContext } from "react";
 import {fbFirestore} from "../../../firebase";
 import Gallery from '../../Grid-Gallery/Gallery.js';
-import {Row, Col, Form}  from 'react-bootstrap';
+import { Grid, TextField, IconButton } from "@material-ui/core";
 
 import ArrowForwardIcon from '@material-ui/icons/ArrowForward';
 import ArrowBackIcon from '@material-ui/icons/ArrowBack';
@@ -10,6 +10,8 @@ import LabelOffIcon from '@material-ui/icons/LabelOff';
 
 import FavoriteBorderIcon from '@material-ui/icons/FavoriteBorder';
 import FavoriteIcon from '@material-ui/icons/Favorite';
+
+import { ImageContext } from "../../Global/components/ImageProvider";
 
 type ImageObj = {
     primaryKey: string,
@@ -22,42 +24,25 @@ type ImageObj = {
     timestamp: number
 }
 
-const ImageGallery = (props: any) => {
+type ImageGalleryProps = {
+    linkAddedId?: string
+}
+
+const ImageGallery = ({ linkAddedId }: ImageGalleryProps) => {
     const [images, setImages] = useState<ImageObj[]>([]);
-    const [numToFetch, setNumToFetch] = useState(10);
-    const [mostRecentTimestamp, setMostRecentTimestamp] = useState(0);
-    const [leastRecentTimestamp, setLeastRecentTimestamp] = useState(0);
+
+    const [numPerPage, setNumPerPage] = useState(10);
+    const [pageIndex, setPageIndex] = useState(0);
     const [showTags, setShowTags] = useState(false);
     const [onlyFavorite, setOnlyFavorite] = useState(false);
 
-    useEffect(() => {
-        fetchInitial();
-    }, [props.addedLink, onlyFavorite]);
+    const { deletedPrimaryKey } = useContext(ImageContext);
 
-    useEffect(() => {
-        refetchImages();
-    }, [numToFetch]);
-    
-    const goForward = () => {
-        let query = fbFirestore.collection("links").orderBy("timestamp", "desc").where("timestamp", "<", leastRecentTimestamp)
-        if(onlyFavorite)
-            query = query.where("updoot", "==", true);
-        query.limit(numToFetch).get()
-        .then(handleLinkEntries)
-        .catch((err) => {
-            alert(err.message);
-        })
-    
-    }
-    const goBack = () => {
-        let query = fbFirestore.collection("links").orderBy("timestamp", "asc").where("timestamp", ">", mostRecentTimestamp)
-        if(onlyFavorite)
-            query = query.where("updoot", "==", true);
-        query.limit(numToFetch).get()
-        .then(handleLinkEntries)
-        .catch((err) => {
-            alert(err.message);
-        })
+    const getLeastRecentTimestamp = () => {
+        if(images.length > 0) {
+            return images[images.length-1].timestamp;
+        }
+        return -1;
     }
 
     const parseImageData = (data: any, primaryKey: string): ImageObj => {
@@ -76,46 +61,6 @@ const ImageGallery = (props: any) => {
         return imageObj;
     }
 
-    const handleLinkEntries = (linkEntries: firebase.default.firestore.QuerySnapshot<firebase.default.firestore.DocumentData>) => {
-        let newImages: ImageObj[] = [];
-        linkEntries.forEach((linkEntry) => {
-            newImages.push(parseImageData(linkEntry.data(), linkEntry.id));
-        });
-        newImages.sort((a: ImageObj, b: ImageObj): number => {
-            return a.timestamp < b.timestamp ? 1 : -1;
-        })
-        if(newImages.length > 0)
-        {
-            setMostRecentTimestamp(newImages[0].timestamp);
-            setLeastRecentTimestamp(newImages[newImages.length-1].timestamp);
-            setImages(newImages);
-        }
-    }
-
-    const refetchImages = () => {
-
-        let query = fbFirestore.collection("links").orderBy("timestamp", "desc").where("timestamp", "<=", mostRecentTimestamp)
-        if(onlyFavorite)
-            query = query.where("updoot", "==", true);
-        query.limit(numToFetch).get()
-        .then(handleLinkEntries)
-        .catch((err) => {
-            console.error(err.message);
-        })
-    }
-
-
-    const fetchInitial = () => {
-        setImages([])
-        let query = fbFirestore.collection("links").orderBy("timestamp", "desc");
-        if(onlyFavorite)
-            query = query.where("updoot", "==", true);
-        query.limit(numToFetch).get()
-        .then(handleLinkEntries)
-        .catch((err) => {
-            console.error(err.message);
-        })
-    }
 
     const toggleShowTags = () => {
         setShowTags(!showTags);
@@ -125,52 +70,130 @@ const ImageGallery = (props: any) => {
         setOnlyFavorite(!onlyFavorite);
     }
 
+    const canGoForward = () => {
+        return (pageIndex + 1) * numPerPage < images.length
+    }
+    const goForward = () => {
+        if(canGoForward())
+            setPageIndex(pageIndex + 1);
+        else {
+            const leastRecentTimestamp = getLeastRecentTimestamp();
 
+            fetchMore(leastRecentTimestamp)
+            .then((gotMore) => {
+                if(gotMore)
+                    setPageIndex(pageIndex + 1);
+            })
+        }
+    }
+
+    const canGoBack = () => {
+        return pageIndex > 0
+    }
+
+    const goBack = () => {
+        if(canGoBack())
+            setPageIndex(pageIndex - 1);
+    }
+
+    const fetchMore = (leastRecentTimestamp: number) => {
+        let query = fbFirestore.collection("links").orderBy("timestamp", "desc");
+        let newImages: ImageObj[] = []
+
+        if(leastRecentTimestamp !== -1) {
+            query = query.startAfter(leastRecentTimestamp)
+            newImages = [...images];
+        }
+        if(onlyFavorite) {
+            query = query.where("updoot", "==", true)
+        }
+        return query.limit(numPerPage).get()
+        .then((snapshot) => {
+            if(snapshot.size > 0) {
+                console.log("Fetch more", snapshot.size)
+                snapshot.docs.forEach((doc) => {
+                    newImages.push(parseImageData(doc.data(), doc.id));
+                })
+                setImages(newImages);
+                return true;
+            }
+            setImages(newImages);
+            return false;
+        })
+    }
     const handleSetNumToFetch = (event: any) => {
         let input: number = parseInt(event.target.value);
         if(input != null && typeof input == "number" && input > 0)
-            setNumToFetch(input);
+            setNumPerPage(input);
     }
 
+    useEffect(() => {
+        setImages([])
+        setPageIndex(0)
+        fetchMore(-1);
+    }, [onlyFavorite])
+
+    useEffect(() => {
+        if(linkAddedId !== undefined) {
+            fbFirestore.collection("links").doc(linkAddedId).get()
+            .then((doc) => {
+                const newImages = [...images];
+                newImages.unshift(parseImageData(doc.data(), doc.id));
+                setImages(newImages);
+            })
+        }
+    }, [linkAddedId])
+
+    useEffect(() => {
+        if(deletedPrimaryKey !== undefined) {
+            const idx = images.findIndex((i) => i.primaryKey === deletedPrimaryKey)
+            if(idx >= 0) {
+                const newImages = [...images];
+                newImages.splice(idx, 1)
+                setImages(newImages);
+            }
+        }
+    }, [deletedPrimaryKey])
 
     return (
         <>
-            <Row className="justify-content-md-center mt-4">
-                <Col md="auto">
-                    <button className="button-material" onClick={toggleOnlyFavorites}>
-                        {onlyFavorite && <><FavoriteIcon/><span>Only Favourites</span></>}
-                        {!onlyFavorite && <><FavoriteBorderIcon/><span>Only Favourites</span></>}
-                    </button>   
-                </Col>
-                <Col md="auto">
-                    <button className="button-material" onClick={refetchImages}>
-                        Refresh
-                    </button>   
-                </Col>
-                <Col md="auto">
-                    <button className="button-material" onClick={toggleShowTags}>
-                        {showTags && <><LabelOffIcon/><span>Hide Tags</span></>}
-                        {!showTags && <><LabelIcon/><span>Show Tags</span></>}
-                    </button>   
-                </Col>
-                <Col md="auto">
-                    <Form.Label>No. Images per Page</Form.Label>
-                    <Form.Control type="number" value={numToFetch} onChange={handleSetNumToFetch}/>
-                </Col>
-            </Row>
-            <Row className="justify-content-md-center mt-4">
-                <Col xs={12}>
-                    <Gallery images={images} showTags={showTags} backdropClosesModal={true}/>
-                </Col>
-            </Row>
-            <Row className="justify-content-md-center mt-4">
-                <Col md="auto">
-                    <button className="button-material" onClick={goBack}><ArrowBackIcon/></button>    
-                </Col>
-                <Col md="auto">
-                    <button className="button-material" onClick={goForward}><ArrowForwardIcon/></button>
-                </Col>
-            </Row>
+            <Grid container justifyContent="center" spacing={1}>
+                <Grid item xs={12}>
+                    <Grid container justifyContent="center" alignItems="center">
+                        <Grid item>
+                            <IconButton onClick={toggleOnlyFavorites}>
+                                {onlyFavorite && <FavoriteIcon color="primary" />}
+                                {!onlyFavorite && <FavoriteBorderIcon color="primary" />}
+                            </IconButton>   
+                        </Grid>
+                        <Grid item>
+                            <IconButton onClick={toggleShowTags}>
+                                {showTags && <LabelOffIcon color="primary" />}
+                                {!showTags && <LabelIcon color="primary" />}
+                            </IconButton>   
+                        </Grid>
+                        <Grid item>
+                            <TextField type="number" label="Images per Page" value={numPerPage} onChange={handleSetNumToFetch} variant="outlined" size="small"/>
+                        </Grid>
+                    </Grid>
+                </Grid>
+                <Grid item xs={12}>
+                    <Gallery images={images.slice(pageIndex * numPerPage, (pageIndex + 1) * numPerPage)} showTags={showTags} backdropClosesModal={true}/>
+                </Grid>
+                <Grid item xs={12}>
+                    <Grid container justifyContent="center" alignItems="center">
+                        <Grid item>
+                            <IconButton onClick={goBack}><ArrowBackIcon color="primary" /></IconButton>
+                        </Grid>
+                        <Grid item>
+                            Page {pageIndex + 1}
+                        </Grid>
+                        <Grid item>
+                            <IconButton onClick={goForward}><ArrowForwardIcon color="primary" /></IconButton>
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </Grid>
         </>
     );
 }

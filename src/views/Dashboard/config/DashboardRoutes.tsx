@@ -5,10 +5,8 @@ import {Dashboard} from "../components";
 
 export const DashboardRoutes = () => {
     return (
-        <Dashboard>
-            <Switch>
-                <Route path="/dashboard" component={Dashboard} />
-            </Switch>
-        </Dashboard>
+        <Switch>
+            <Route path="/dashboard" component={Dashboard} />
+        </Switch>
     );
 }

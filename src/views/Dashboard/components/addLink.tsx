@@ -1,11 +1,10 @@
 import React, {useEffect, useState} from "react";
-import {Col, Form } from "react-bootstrap";
+import { Grid, Button, TextField } from "@material-ui/core";
 import {fbFirestore} from "../../../firebase";
 import matchLink from "../../../models/matchLink";
-import DoneIcon from '@material-ui/icons/Done';
 
 interface AddLinkProps {
-    addedLinkEvent: () =>  void,
+    addedLinkEvent: (id: string) =>  void,
 }
 
 const AddLink = ({ addedLinkEvent } : AddLinkProps) => {
@@ -15,10 +14,6 @@ const AddLink = ({ addedLinkEvent } : AddLinkProps) => {
     const [tagsString, setTagsString] =  useState('');
     const [tagsValue, setTagsValue] = useState<string[]>([]);
     const [urlValue, setURLValue] = useState('');
-
-    const [success, setSuccess] = useState(false);
-    const [fadeOut, setFadeOut] = useState("");
-
 
     const handleLinkChange = (ev: any) => {
         let input = (ev.target as any).value;
@@ -122,23 +117,14 @@ const AddLink = ({ addedLinkEvent } : AddLinkProps) => {
             updoot: false,
             tags: tagsValue
         })
-        .then((result: any) => {
-            console.log(result);
-            setSuccess(true);
+        .then((result) => {
             setLinkValue('');
             setSourceValue('');
             setTagsString('');
             setTagsValue([]);
             setURLValue('');
 
-            addedLinkEvent();
-
-            setTimeout(() => {
-                setFadeOut("animated fadeOut");
-                setTimeout(() => {
-                    setSuccess(false);
-                }, 500);
-            }, 500);
+            addedLinkEvent(result.id);
         })
         .catch((error) => {
             alert(error.message);
@@ -146,42 +132,26 @@ const AddLink = ({ addedLinkEvent } : AddLinkProps) => {
     }
     return (
         <>
-            <Form>
-                <Form.Row>
-                    <Form.Group as={Col} md="12" controlId="linkInput">
-                        <Form.Label>Link</Form.Label>
-                        <Form.Control type="text" placeholder="Add link" value={linkValue} onChange={handleLinkChange}/>
-                    </Form.Group>
-                </Form.Row>
-                <Form.Row>
-                    <Form.Group as={Col} md="12" controlId="tags">
-                        <Form.Label>Tags</Form.Label>
-                        <Form.Control type="text" placeholder="Tags (comma separated)" value={tagsString} onChange={handleTagsChange}/>
-                    </Form.Group>
-                </Form.Row>
-                <Form.Row>
-                    <Form.Group as={Col} md="12" controlId="urlValue">
-                        <Form.Label>Image</Form.Label>
-                        <Form.Control type="text" value={urlValue} onChange={handleUrlChange}/>
-                    </Form.Group>
-                </Form.Row>
-                <Form.Row>
-                    <Form.Group as={Col} md="12" controlId="sourceValue">
-                        <Form.Label>Source</Form.Label>
-                        <Form.Control type="text" value={sourceValue}  onChange={handleSourceChange}/>
-                    </Form.Group>
-                </Form.Row>
-                <Form.Row>
-                    <Form.Group as={Col} md="1" controlId="submit">
-                    <button type="submit" className="button-border" onClick={addLink}>Add</button>
-                    </Form.Group>
-                    {success &&
-                    <Form.Label className={fadeOut}>
-                        <DoneIcon/>
-                    </Form.Label>}
-                </Form.Row>
-            </Form>
-            <img className="preview-image" src={urlValue}/>
+            <Grid container spacing={1}>
+                <Grid item xs={12}>
+                    <TextField variant="outlined" fullWidth label="Link" placeholder="Add link" value={linkValue} onChange={handleLinkChange}/>
+                </Grid>
+                <Grid item xs={12}>
+                    <TextField variant="outlined" fullWidth label="Tags" placeholder="Tags (comma separated)" value={tagsString} onChange={handleTagsChange}/>
+                </Grid>
+                <Grid item xs={12}>
+                    <TextField variant="outlined" fullWidth label="Image" value={urlValue} onChange={handleUrlChange}/>
+                </Grid>
+                <Grid item xs={12}>
+                    <TextField variant="outlined" fullWidth label="Source" value={sourceValue}  onChange={handleSourceChange}/>
+                </Grid>
+                <Grid item xs={12}>
+                    <Button color="primary" variant="outlined" onClick={addLink}>Add</Button>
+                </Grid>
+                <Grid item xs={12}>
+                    <img className="preview-image" src={urlValue}/>
+                </Grid>
+            </Grid>
         </>
 
     );
